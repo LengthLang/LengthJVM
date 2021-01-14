@@ -10,7 +10,11 @@ import java.io.IOException
 import java.util.*
 
 fun compile(program: List<Parser.Op>, name: String) {
-   val cw = ClassWriter(ClassWriter.COMPUTE_MAXS)
+   if (!verify(program)) {
+      print("There would be a stackunderflow, so your program wasn't compiled")
+      return
+   }
+   val cw = ClassWriter(ClassWriter.COMPUTE_MAXS or ClassWriter.COMPUTE_FRAMES)
    cw.visit(
       Opcodes.V1_8,
       Opcodes.ACC_PUBLIC,
@@ -55,6 +59,7 @@ fun compile(program: List<Parser.Op>, name: String) {
    program.forEachIndexed { i, instruction ->
       val label = labels[i]
       mv.visitLabel(label)
+      mv.visitFrame(0, 0, null, 0, null);
       mv.visitLineNumber(i + 1, label)
       when (instruction) {
          Parser.Op.Input -> {
@@ -125,5 +130,28 @@ fun compile(program: List<Parser.Op>, name: String) {
    } catch (ex: IOException) {
       ex.printStackTrace()
    }
+}
+
+private fun verify(program: List<Parser.Op>): Boolean {
+   var stackHeight = 0
+   var pc = 0
+   while (pc < program.count()) {
+      val op = program[pc]
+      stackHeight += when (op) {
+         Parser.Op.Add, Parser.Op.Sub, Parser.Op.Mul, Parser.Op.Div -> -2
+         Parser.Op.Dup, Parser.Op.Cond, Parser.Op.Input -> 1
+         Parser.Op.GotoS, Parser.Op.OutN, Parser.Op.OutA, Parser.Op.Cond -> -1
+         else -> if (op is Parser.Op.Push) 1 else if (op is Parser.Op.GotoU) {
+            pc = op.line
+            -1
+         } else {
+            0
+         }
+      }
+      pc++
+      print(stackHeight)
+      if (stackHeight < 0) return false
+   }
+   return true
 }
 
